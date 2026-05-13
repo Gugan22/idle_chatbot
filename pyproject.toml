@@ -1,0 +1,31 @@
+[project]
+name = "chatbot"
+version = "0.1.0"
+description = "Demo ChatBot"
+authors = [
+    {name = "Gugan",email = "gugan.rs@cloudhalotech.com"}
+]
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "fastapi",
+    "uvicorn[standard]",
+    "python-dotenv",
+    "PyJWT",
+    "pydantic>=2.7.0",
+    "pydantic-settings>=2.2.0",
+    "python-multipart>=0.0.9",
+    "python-frontmatter>=1.1.0",
+    "ragas>=0.1.9",
+    "prometheus-client>=0.20.0",
+    "structlog>=24.1.0",
+    "tenacity>=8.3.0"
+]
+
+
+[tool.poetry]
+packages = [{include = "app", from = "src"}]
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
