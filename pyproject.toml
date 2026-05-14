@@ -1,27 +1,63 @@
 [project]
 name = "chatbot"
 version = "0.1.0"
-description = "Demo ChatBot"
+description = "Customizable RAG Chatbot"
 authors = [
-    {name = "Gugan",email = "gugan.rs@cloudhalotech.com"}
+    {name = "Gugan", email = "gugan2206@gmail.com"}
 ]
 readme = "README.md"
-requires-python = ">=3.14"
+requires-python = "<3.15,>=3.10"
+
 dependencies = [
-    "fastapi",
-    "uvicorn[standard]",
-    "python-dotenv",
-    "PyJWT",
+    # ── API ───────────────────────────────────────────────────────────────
+    "fastapi>=0.111.0",
+    "uvicorn[standard]>=0.29.0",
+    "python-multipart>=0.0.9",
+
+    # ── Auth ──────────────────────────────────────────────────────────────
+    "PyJWT>=2.8.0",
+
+    # ── Config & validation ───────────────────────────────────────────────
     "pydantic>=2.7.0",
     "pydantic-settings>=2.2.0",
-    "python-multipart>=0.0.9",
+    "python-dotenv>=1.0.0",
+
+    # ── Vector DB ─────────────────────────────────────────────────────────
+    "qdrant-client>=1.9.0",
+
+    # ── Semantic cache ────────────────────────────────────────────────────
+    "redis[hiredis]>=5.0.0",
+    "redisvl>=0.2.0",
+
+    # ── Embedding + reranking ─────────────────────────────────────────────
+    "sentence-transformers>=3.0.0",
+    "torch>=2.2.0",
+    "transformers>=4.40.0",
+
+    # ── LLM inference (OpenAI-compatible — works with NVIDIA NIM + Ollama)
+    "openai>=1.30.0",
+
+    # ── Guardrails ────────────────────────────────────────────────────────
+    "nemoguardrails>=0.9.0",
+
+    # ── Document parsing ──────────────────────────────────────────────────
     "python-frontmatter>=1.1.0",
+
+    # ── Observability ─────────────────────────────────────────────────────
     "ragas>=0.1.9",
     "prometheus-client>=0.20.0",
     "structlog>=24.1.0",
-    "tenacity>=8.3.0"
+
+    # ── Resilience ────────────────────────────────────────────────────────
+    "tenacity>=8.3.0",
 ]
 
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.2.0",
+    "pytest-asyncio>=0.23.0",
+    "httpx>=0.27.0",
+]
 
 [tool.poetry]
 packages = [{include = "app", from = "src"}]

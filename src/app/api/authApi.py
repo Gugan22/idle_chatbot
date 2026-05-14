@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-import os
+from app import settings
 import time
 import jwt
 
@@ -17,10 +17,10 @@ class TokenResponse(BaseModel):
 	token_type: str = "bearer"
 
 
-DEFAULT_USERNAME = os.getenv("DEFAULT_USERNAME")
-DEFAULT_PASSWORD = os.getenv("DEFAULT_PASSWORD")
-AUTH_SECRET = os.getenv("AUTH_SECRET")
-DEFAULT_TTL_SECONDS = int(os.getenv("TOKEN_TTL_SECONDS", 3600))
+DEFAULT_USERNAME = settings.default_username
+DEFAULT_PASSWORD = settings.default_password
+AUTH_SECRET = settings.auth_secret
+DEFAULT_TTL_SECONDS = settings.token_ttl_seconds
 
 
 @router.post("/login", response_model=TokenResponse)

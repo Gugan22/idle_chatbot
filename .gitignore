@@ -1,0 +1,40 @@
+# Ignore the virtual environment directory
+.venv
+.venv/*
+
+# Ignore the .qodo directory
+.qodo
+.qodo/*
+
+# Ignore the .vscode directory
+.vscode
+.vscode/*
+
+# Ignore the .idea directory
+.idea
+.idea/*
+
+# Ignore Python bytecode files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Ignore Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# Ignore log files
+*.log
+
+# Ignore coverage reports
+htmlcov/
+.coverage
+.coverage.*
+
+# Ignore distribution files
+dist/
+build/
+*.egg-info/
+
+# Ignore poetry lock file
+poetry.lock

@@ -1,0 +1,108 @@
+version: "3.9"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# docker/podman-compose.yml
+#
+# Services:
+#   qdrant   — vector database        (REST :6333, gRPC :6334)
+#   redis    — Redis Stack + search   (:6379, RedisInsight UI :8001)
+#   api      — FastAPI RAG chatbot    (:8080)  ← matches main.py default
+#
+# Usage:
+#   podman-compose -f docker/podman-compose.yml up -d
+#   podman-compose -f docker/podman-compose.yml down
+#   podman-compose -f docker/podman-compose.yml logs -f api
+# ─────────────────────────────────────────────────────────────────────────────
+
+networks:
+  rag-net:
+    driver: bridge
+
+volumes:
+  qdrant_storage:
+  redis_storage:
+
+services:
+
+  # ── Qdrant ──────────────────────────────────────────────────────────────────
+  qdrant:
+    image: docker.io/qdrant/qdrant:latest
+    container_name: insurance-qdrant
+    restart: always
+    ports:
+      - "6333:6333"     # REST API  — used by qdrant-client in Python
+      - "6334:6334"     # gRPC API  — used for bulk upserts
+    volumes:
+      - qdrant_storage:/qdrant/storage    # named volume — safe on Windows/WSL2
+    environment:
+      QDRANT__SERVICE__HTTP_PORT: 6333
+      QDRANT__SERVICE__GRPC_PORT: 6334
+      QDRANT__LOG_LEVEL: INFO
+    networks:
+      - rag-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6333/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+
+  # ── Redis Stack ──────────────────────────────────────────────────────────────
+  # Must be redis-stack (not plain redis) — RediSearch module required
+  # for vector similarity in the semantic FAQ cache.
+  redis:
+    image: docker.io/redis/redis-stack:latest
+    container_name: insurance-redis
+    restart: always
+    ports:
+      - "6379:6379"     # Redis
+      - "8001:8001"     # RedisInsight web UI (optional debug tool)
+    volumes:
+      - redis_storage:/data               # named volume — safe on Windows/WSL2
+    environment:
+      REDIS_ARGS: "--save 60 1 --loglevel warning"
+    networks:
+      - rag-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+
+  # ── FastAPI RAG API ────────────────────────────────────────────────────────
+  api:
+    build:
+      context: ..                          # project root (one level up from docker/)
+      dockerfile: docker/Dockerfile
+    container_name: insurance-api
+    restart: always
+    ports:
+      - "8080:8080"                        # matches HOST/PORT defaults in main.py
+    env_file:
+      - ../.env                            # reads your .env from the project root
+    environment:
+      # ── Server ─────────────────────────────────────────────────────────
+      HOST: 0.0.0.0                        # bind to all interfaces inside container
+      PORT: 8080
+
+      # ── Infrastructure — override localhost with container service names ─
+      # These override the .env values so containers find each other by name
+      # instead of trying to reach localhost (which would be themselves).
+      QDRANT_HOST: qdrant
+      QDRANT_PORT: 6333
+      REDIS_URL: redis://redis:6379
+
+      # ── App ────────────────────────────────────────────────────────────
+      COLLECTION_NAME: insurance_policies
+      LOG_LEVEL: INFO
+      LOG_RAW_QUERIES: "false"
+
+    depends_on:
+      qdrant:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - rag-net
+    volumes:
+      - ../src/app/rag/docs:/app/src/app/rag/docs:ro  # content team docs, read-only

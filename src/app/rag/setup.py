@@ -23,7 +23,7 @@ from qdrant_client.models import (
     PayloadSchemaType,
     OptimizersConfigDiff,
 )
-from app.config import settings
+from app import settings
 
 
 def create_collection(client: QdrantClient, recreate: bool = False) -> None:
