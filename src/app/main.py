@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from dotenv import load_dotenv
+import uvicorn
 
 # Load .env BEFORE importing config so pydantic-settings picks up all values
 load_dotenv()
@@ -12,7 +13,7 @@ from app import settings
 from app.api import auth_router
 
 # ── Middleware ─────────────────────────────────────────────────────────────────
-from security import JWTAuthMiddleware
+from app.security import JWTAuthMiddleware
 
 
 def create_app() -> JWTAuthMiddleware:
@@ -41,15 +42,14 @@ def create_app() -> JWTAuthMiddleware:
 app = create_app()
 
 
-if __name__ == "__main__":
-    import uvicorn
+def start_server():
 
     # All values from settings — zero direct os.getenv() calls
     host = settings.host
     port = settings.port
 
     try:
-        uvicorn.run("app.main:app", host=host, port=port, reload=True)
+        uvicorn.run("app.main:app", app_dir="src", host=host, port=port, reload=True)
 
     except OSError as e:
         msg = str(e)
@@ -92,3 +92,6 @@ if __name__ == "__main__":
                 print("  Run terminal as Administrator if binding to a restricted port")
         else:
             print("uvicorn failed to start:", e)
+
+if __name__ == "__main__":
+    start_server()

@@ -3,15 +3,23 @@ version: "3.9"
 # ─────────────────────────────────────────────────────────────────────────────
 # docker/podman-compose.yml
 #
-# Services:
-#   qdrant   — vector database        (REST :6333, gRPC :6334)
-#   redis    — Redis Stack + search   (:6379, RedisInsight UI :8001)
-#   api      — FastAPI RAG chatbot    (:8080)  ← matches main.py default
+# Single compose file for all environments using profiles.
 #
 # Usage:
-#   podman-compose -f docker/podman-compose.yml up -d
-#   podman-compose -f docker/podman-compose.yml down
-#   podman-compose -f docker/podman-compose.yml logs -f api
+#   Dev  (infra only, app runs via Poetry):
+#     podman-compose --profile dev up -d
+#
+#   QA   (fully containerised):
+#     podman-compose --profile qa up -d --build
+#
+#   Prod (fully containerised, no Swagger):
+#     podman-compose --profile prod up -d --build
+#
+#   Stop all:
+#     podman-compose --profile dev down        (or qa / prod)
+#
+#   Logs:
+#     podman-compose --profile qa logs -f api-qa
 # ─────────────────────────────────────────────────────────────────────────────
 
 networks:
@@ -25,19 +33,21 @@ volumes:
 services:
 
   # ── Qdrant ──────────────────────────────────────────────────────────────────
+  # Shared across ALL profiles — always starts regardless of environment.
   qdrant:
     image: docker.io/qdrant/qdrant:latest
     container_name: insurance-qdrant
     restart: always
+    profiles: ["dev", "qa", "prod"]
     ports:
-      - "6333:6333"     # REST API  — used by qdrant-client in Python
-      - "6334:6334"     # gRPC API  — used for bulk upserts
+      - "6333:6333"     # REST API
+      - "6334:6334"     # gRPC API
     volumes:
-      - qdrant_storage:/qdrant/storage    # named volume — safe on Windows/WSL2
+      - qdrant_storage:/qdrant/storage
     environment:
       QDRANT__SERVICE__HTTP_PORT: 6333
       QDRANT__SERVICE__GRPC_PORT: 6334
-      QDRANT__LOG_LEVEL: INFO
+      QDRANT__LOG_LEVEL: ${QDRANT_LOG_LEVEL:-INFO}
     networks:
       - rag-net
     healthcheck:
@@ -48,17 +58,17 @@ services:
       start_period: 20s
 
   # ── Redis Stack ──────────────────────────────────────────────────────────────
-  # Must be redis-stack (not plain redis) — RediSearch module required
-  # for vector similarity in the semantic FAQ cache.
+  # Shared across ALL profiles.
   redis:
     image: docker.io/redis/redis-stack:latest
     container_name: insurance-redis
     restart: always
+    profiles: ["dev", "qa", "prod"]
     ports:
       - "6379:6379"     # Redis
-      - "8001:8001"     # RedisInsight web UI (optional debug tool)
+      - "8001:8001"     # RedisInsight UI
     volumes:
-      - redis_storage:/data               # named volume — safe on Windows/WSL2
+      - redis_storage:/data
     environment:
       REDIS_ARGS: "--save 60 1 --loglevel warning"
     networks:
@@ -69,34 +79,28 @@ services:
       timeout: 5s
       retries: 5
 
-  # ── FastAPI RAG API ────────────────────────────────────────────────────────
-  api:
+  # ── API — QA profile ─────────────────────────────────────────────────────────
+  # Full containerised stack. Swagger UI ON. For QA testers.
+  api-qa:
     build:
-      context: ..                          # project root (one level up from docker/)
+      context: ..
       dockerfile: docker/Dockerfile
-    container_name: insurance-api
+    container_name: insurance-api-qa
     restart: always
+    profiles: ["qa"]
     ports:
-      - "8080:8080"                        # matches HOST/PORT defaults in main.py
+      - "8080:8080"
     env_file:
-      - ../.env                            # reads your .env from the project root
+      - ../.env.qa
     environment:
-      # ── Server ─────────────────────────────────────────────────────────
-      HOST: 0.0.0.0                        # bind to all interfaces inside container
+      HOST: 0.0.0.0
       PORT: 8080
-
-      # ── Infrastructure — override localhost with container service names ─
-      # These override the .env values so containers find each other by name
-      # instead of trying to reach localhost (which would be themselves).
+      ENV: qa
       QDRANT_HOST: qdrant
       QDRANT_PORT: 6333
       REDIS_URL: redis://redis:6379
-
-      # ── App ────────────────────────────────────────────────────────────
-      COLLECTION_NAME: insurance_policies
       LOG_LEVEL: INFO
       LOG_RAW_QUERIES: "false"
-
     depends_on:
       qdrant:
         condition: service_healthy
@@ -105,4 +109,41 @@ services:
     networks:
       - rag-net
     volumes:
-      - ../src/app/rag/docs:/app/src/app/rag/docs:ro  # content team docs, read-only
+      - ../src/app/rag/docs:/app/src/app/rag/docs:ro
+
+  # ── API — Prod profile ───────────────────────────────────────────────────────
+  # Full containerised stack. Swagger UI OFF. WARNING logs only.
+  api-prod:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: insurance-api-prod
+    restart: always
+    profiles: ["prod"]
+    ports:
+      - "8080:8080"
+    env_file:
+      - ../.env.prod
+    environment:
+      HOST: 0.0.0.0
+      PORT: 8080
+      ENV: production
+      QDRANT_HOST: qdrant
+      QDRANT_PORT: 6333
+      REDIS_URL: redis://redis:6379
+      LOG_LEVEL: WARNING
+      LOG_RAW_QUERIES: "false"
+    depends_on:
+      qdrant:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - rag-net
+    volumes:
+      - ../src/app/rag/docs:/app/src/app/rag/docs:ro
+
+  # ── NOTE: No api service in dev profile ─────────────────────────────────────
+  # In dev, run the FastAPI app directly with Poetry for hot-reload:
+  #   poetry run python src/app/main.py
+  # The app connects to qdrant and redis containers via localhost ports.
