@@ -60,6 +60,44 @@
         "header": []
       },
       "response": []
+    },
+    {
+      "name": "Chat Message",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n    \"message\": \"What is home insurance?\"\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{host}}/chat/message",
+          "host": [
+            "{{host}}"
+          ],
+          "path": [
+            "chat",
+            "message"
+          ]
+        }
+      },
+      "response": []
     }
   ],
   "event": [

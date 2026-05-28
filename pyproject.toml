@@ -36,6 +36,8 @@ dependencies = [
 
     # ── LLM inference (OpenAI-compatible — works with NVIDIA NIM + Ollama)
     "openai>=1.30.0",
+    "langchain-core>=0.3.0",
+    "langchain-openai>=0.3.0",
 
     # ── Guardrails ────────────────────────────────────────────────────────
     "nemoguardrails>=0.9.0",

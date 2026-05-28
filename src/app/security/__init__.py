@@ -6,7 +6,12 @@ import jwt
 
 # env values
 AUTH_SECRET = os.getenv("AUTH_SECRET")  # required for signing tokens
-ALLOWED_PREFIXES = ["/auth"]
+ALLOWED_PREFIXES = [
+	"/auth",
+	"/docs",
+	"/openapi.json",
+	"/docs/oauth2-redirect",
+]
 
 
 class JWTAuthMiddleware:

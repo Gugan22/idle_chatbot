@@ -10,7 +10,7 @@ load_dotenv()
 from app import settings
 
 # ── Routers ────────────────────────────────────────────────────────────────────
-from app.api import auth_router
+from app.api import auth_router, chat_router
 
 # ── Middleware ─────────────────────────────────────────────────────────────────
 from app.security import JWTAuthMiddleware
@@ -28,6 +28,7 @@ def create_app() -> JWTAuthMiddleware:
 
     # ── Routers ────────────────────────────────────────────────────────────────
     app.include_router(auth_router)
+    app.include_router(chat_router)
 
     # Uncomment as each phase is completed:
     # app.include_router(rag_router, prefix="/api/v1")
