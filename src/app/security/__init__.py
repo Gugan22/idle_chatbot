@@ -6,6 +6,7 @@ import jwt
 
 # env values
 AUTH_SECRET = os.getenv("AUTH_SECRET")  # required for signing tokens
+# changed by akilu - keep Swagger docs open while protecting API routes
 ALLOWED_PREFIXES = [
 	"/auth",
 	"/docs",

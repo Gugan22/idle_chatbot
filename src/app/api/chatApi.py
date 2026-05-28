@@ -6,6 +6,7 @@ from app import settings
 from app.chatbot import generate_chat_response
 
 
+# changed by akilu - protected chatbot API route
 router = APIRouter(prefix="/chat", tags=["chat"])
 bearer_scheme = HTTPBearer()
 

@@ -36,6 +36,7 @@ dependencies = [
 
     # ── LLM inference (OpenAI-compatible — works with NVIDIA NIM + Ollama)
     "openai>=1.30.0",
+    # changed by akilu - basic LangChain chat endpoint dependencies
     "langchain-core>=0.3.0",
     "langchain-openai>=0.3.0",
 

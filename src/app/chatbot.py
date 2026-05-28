@@ -5,6 +5,7 @@ from functools import lru_cache
 from app import settings
 
 
+# changed by akilu - basic LangChain chatbot wrapper
 SYSTEM_PROMPT = (
     "You are a helpful insurance chatbot. Answer clearly and concisely. "
     "If you do not know something, say so instead of guessing. "

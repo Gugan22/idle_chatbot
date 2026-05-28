@@ -28,6 +28,7 @@ def create_app() -> JWTAuthMiddleware:
 
     # ── Routers ────────────────────────────────────────────────────────────────
     app.include_router(auth_router)
+    # changed by akilu - register basic chatbot endpoint
     app.include_router(chat_router)
 
     # Uncomment as each phase is completed:
