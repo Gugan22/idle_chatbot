@@ -1,18 +1,29 @@
 """
-setup_collection.py
-────────────────────────────────────────────────────────────────────────────
-One-time setup script. Creates the Qdrant collection, configures HNSW,
-enables Binary Quantization, and creates payload indexes on all filter fields.
+src/app/rag/setup.py
+─────────────────────────────────────────────────────────────────────────────
+One-time Qdrant collection setup.
+Fixed for qdrant-client >= 1.9:
+  ef_construction → ef_construct  (renamed in the Pydantic model)
 
-Safe to re-run — skips creation if the collection already exists.
+Safe to re-run — skips if collection already exists.
 
 Usage:
-    python setup_collection.py
-    python setup_collection.py --recreate   # drops and recreates (DELETES ALL DATA)
+    poetry run python src/app/rag/setup.py
+    poetry run python src/app/rag/setup.py --recreate   # DELETES ALL DATA
 """
 
-import argparse
 import sys
+import argparse
+from pathlib import Path
+
+# ── Ensure src/ is on sys.path ────────────────────────────────────────────────
+ROOT = Path(__file__).resolve().parents[3]
+SRC  = ROOT / "src"
+if str(SRC) not in sys.path:
+    sys.path.insert(0, str(SRC))
+
+from app.config import settings
+
 from qdrant_client import QdrantClient
 from qdrant_client.models import (
     VectorParams,
@@ -23,7 +34,6 @@ from qdrant_client.models import (
     PayloadSchemaType,
     OptimizersConfigDiff,
 )
-from app import settings
 
 
 def create_collection(client: QdrantClient, recreate: bool = False) -> None:
@@ -31,63 +41,51 @@ def create_collection(client: QdrantClient, recreate: bool = False) -> None:
 
     if settings.collection_name in existing:
         if recreate:
-            print(f"[setup] Dropping existing collection '{settings.collection_name}'...")
+            print(f"[setup] Dropping collection '{settings.collection_name}'...")
             client.delete_collection(settings.collection_name)
-            print("[setup] Collection dropped.")
+            print("[setup] Dropped.")
         else:
             print(f"[setup] Collection '{settings.collection_name}' already exists. Skipping.")
-            print("[setup] Run with --recreate to drop and recreate (DELETES ALL DATA).")
+            print("[setup] Use --recreate to drop and recreate (DELETES ALL DATA).")
             return
 
     print(f"[setup] Creating collection '{settings.collection_name}'...")
-    print(f"        embed_dim  = {settings.embed_dim}")
-    print(f"        distance   = COSINE")
-    print(f"        quantize   = Binary (40x memory reduction)")
+    print(f"        embed_dim = {settings.embed_dim}")
+    print(f"        distance  = COSINE")
+    print(f"        quantize  = Binary")
 
     client.create_collection(
         collection_name=settings.collection_name,
         vectors_config=VectorParams(
             size=settings.embed_dim,
             distance=Distance.COSINE,
-            # Store raw vectors on disk, quantized index in RAM.
-            # This is the recommended setting for 30M+ vectors.
             on_disk=True,
         ),
         hnsw_config=HnswConfigDiff(
-            m=16,                   # number of edges per node (higher = better recall, more RAM)
-            ef_construction=128,    # search width during index build (higher = slower build, better quality)
-            on_disk=False,          # keep HNSW graph in RAM for fast traversal
+            m=16,
+            ef_construct=128,    # was ef_construction in qdrant-client < 1.9
+            on_disk=False,
         ),
-        # Binary Quantization: compresses each dimension to 1 bit.
-        # Reduces memory from ~450GB to ~12GB for 30M × 384-dim vectors.
-        # Recall loss is minimal with oversampling enabled.
         quantization_config=BinaryQuantization(
             binary=BinaryQuantizationConfig(
-                always_ram=True,    # quantized index always in RAM, raw vectors on disk
+                always_ram=True,
             )
         ),
         optimizers_config=OptimizersConfigDiff(
-            # Increase memmap_threshold to avoid too-frequent index rebuilds
-            # during bulk ingestion of 30M documents.
             memmap_threshold=50000,
         ),
     )
     print("[setup] Collection created.")
 
-    # ── Payload indexes ────────────────────────────────────────────────────
-    # Without these, filtered searches scan every point.
-    # With them, Qdrant can narrow the candidate set before ANN.
-    # Create an index for every field you filter on in searcher.py.
-
+    # ── Payload indexes ────────────────────────────────────────────────────────
     payload_indexes = [
-        ("doc_type",      PayloadSchemaType.KEYWORD),   # policy | faq | exclusion | endorsement
-        ("coverage_type", PayloadSchemaType.KEYWORD),   # fire | flood | theft | earthquake
-        ("region",        PayloadSchemaType.KEYWORD),   # tamil_nadu | maharashtra | all …
-        ("policy_id",     PayloadSchemaType.KEYWORD),   # HOME-FIRE-TN-2024
-        ("language",      PayloadSchemaType.KEYWORD),   # en | ta | hi
-        ("tags",          PayloadSchemaType.KEYWORD),   # array field — one index covers all tags
-        ("version",       PayloadSchemaType.FLOAT),     # numeric — supports range filters
-        ("last_updated",  PayloadSchemaType.TEXT),      # ISO date string
+        ("doc_type",      PayloadSchemaType.KEYWORD),
+        ("coverage_type", PayloadSchemaType.KEYWORD),
+        ("region",        PayloadSchemaType.KEYWORD),
+        ("policy_id",     PayloadSchemaType.KEYWORD),
+        ("language",      PayloadSchemaType.KEYWORD),
+        ("tags",          PayloadSchemaType.KEYWORD),
+        ("version",       PayloadSchemaType.FLOAT),
     ]
 
     print("[setup] Creating payload indexes...")
@@ -97,14 +95,13 @@ def create_collection(client: QdrantClient, recreate: bool = False) -> None:
             field_name=field_name,
             field_schema=schema_type,
         )
-        print(f"        ✓ {field_name} ({schema_type})")
+        print(f"        + {field_name}")
 
-    print("[setup] All payload indexes created.")
-    print("[setup] ✓ Setup complete.")
+    print("[setup] Setup complete.")
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Set up Qdrant collection for insurance RAG.")
+    parser = argparse.ArgumentParser(description="Set up Qdrant collection.")
     parser.add_argument(
         "--recreate",
         action="store_true",
@@ -114,7 +111,7 @@ def main() -> None:
 
     if args.recreate:
         confirm = input(
-            f"[setup] WARNING: This will DELETE ALL DATA in '{settings.collection_name}'.\n"
+            f"[setup] WARNING: Deletes ALL DATA in '{settings.collection_name}'.\n"
             "        Type 'yes' to confirm: "
         )
         if confirm.strip().lower() != "yes":
@@ -128,7 +125,7 @@ def main() -> None:
         print(f"[setup] Connected to Qdrant at {settings.qdrant_host}:{settings.qdrant_port}")
     except Exception as e:
         print(f"[setup] ERROR: Cannot connect to Qdrant — {e}")
-        print(f"        Is Qdrant running? Try: podman start insurance-qdrant")
+        print("        Is Qdrant running? Try: podman start insurance-qdrant")
         sys.exit(1)
 
     create_collection(client, recreate=args.recreate)
