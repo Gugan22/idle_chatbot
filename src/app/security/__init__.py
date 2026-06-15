@@ -1,12 +1,17 @@
 # JWT Authorization middleware and helper
-import os
 from starlette.types import ASGIApp, Receive, Scope, Send
 from starlette.responses import JSONResponse
 import jwt
 
-# env values
-AUTH_SECRET = os.getenv("AUTH_SECRET")  # required for signing tokens
-ALLOWED_PREFIXES = ["/auth"]
+from app.config import settings
+
+# Akilu changed this because auth must use the same validated configuration
+# source as login token generation.
+AUTH_SECRET = settings.auth_secret
+# Akilu changed this because the browser UI and its static assets must load
+# before the page can obtain a token for protected chatbot requests.
+ALLOWED_PREFIXES = ("/static/",)
+ALLOWED_EXACT_PATHS = {"/", "/chat", "/auth/login", "/api/v1/health"}
 
 
 class JWTAuthMiddleware:
@@ -28,6 +33,9 @@ class JWTAuthMiddleware:
 			return
 
 		path = scope.get("path", "")
+		if path in ALLOWED_EXACT_PATHS:
+			await self.app(scope, receive, send)
+			return
 		for p in ALLOWED_PREFIXES:
 			if path.startswith(p):
 				await self.app(scope, receive, send)

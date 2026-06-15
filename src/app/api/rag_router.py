@@ -3,24 +3,14 @@ src/app/api/rag_router.py
 ─────────────────────────────────────────────────────────────────────────────
 RAG API routes — POST /chat and POST /ingest.
 
-Your responsibility:
-  - Running the full RAG pipeline up to prompt-ready
-  - Returning RAGResult with messages, sources, cache_hit, confidence
-  - The /ingest endpoint
-
-LLM person's responsibility:
-  - Replacing the LLM_STUB block in /chat with their generate() call
-  - Populating answer, flagged, failed in ChatResponse
-  - The streaming /chat/stream endpoint (optional)
-
-Handoff is clearly marked with:
-  # ── LLM INTEGRATION POINT ──
+Runs retrieval, LLM generation, response checks, caching, and ingestion.
 """
 
 from __future__ import annotations
 
 import time
 import sys
+import secrets
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Header, status
@@ -49,7 +39,8 @@ from app.rag.retrieval import (
     build_no_context_response,
     extract_cited_chunks,
 )
-from app.rag.generation.guardrails import run_input_guard
+from app.rag.generation.guardrails import check_output, run_input_guard
+from app.rag.generation.llm import generate
 
 rag_router = APIRouter(prefix="/rag", tags=["RAG"])
 
@@ -57,7 +48,12 @@ rag_router = APIRouter(prefix="/rag", tags=["RAG"])
 # ── Auth dependency ───────────────────────────────────────────────────────────
 # /ingest is protected — only callers with the correct API key can trigger it
 def verify_ingest_key(x_ingest_key: str = Header(...)) -> None:
-    if x_ingest_key != settings.ingest_api_key:
+    if not settings.ingest_api_key:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Ingestion API key is not configured.",
+        )
+    if not secrets.compare_digest(x_ingest_key, settings.ingest_api_key):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Invalid ingest API key.",
@@ -74,7 +70,7 @@ def verify_ingest_key(x_ingest_key: str = Header(...)) -> None:
     summary="Ask an insurance question",
     description=(
         "Runs the full RAG pipeline: guardrail → embed → cache → search → "
-        "rerank → prompt. The LLM call is handled separately."
+        "rerank → prompt → LLM generation → output guardrail."
     ),
 )
 async def chat(request: ChatRequest) -> ChatResponse:
@@ -150,52 +146,29 @@ async def chat(request: ChatRequest) -> ChatResponse:
     prompt_result = build_prompt(request.query, ranked_chunks)
     messages      = prompt_result["messages"]
     used_chunks   = prompt_result["context_chunks"]
-    sources       = _chunks_to_sources(used_chunks, "")
+    # Akilu changed this because /rag/chat should complete the full chatbot
+    # pipeline instead of returning a prompt-ready placeholder.
+    t0 = time.perf_counter()
+    llm_result = generate(messages)
+    latency["llm_ms"] = _ms(t0)
+    output_check = check_output(llm_result["answer"], used_chunks)
+    final_answer = output_check["answer"]
+    cited_ids = extract_cited_chunks(final_answer, used_chunks)
+
+    # Akilu changed this because unsupported or source-less answers must not become reusable cached responses.
+    if not llm_result["failed"] and not output_check["flagged"] and cited_ids:
+        store_in_cache(request.query, query_embedding, final_answer, cited_ids)
 
     latency["total_ms"] = _ms(t_start)
 
-    # ─────────────────────────────────────────────────────────────────────────
-    # ── LLM INTEGRATION POINT ────────────────────────────────────────────────
-    # Everything above this line is the RAG pipeline (Gugan's work).
-    # Everything below this line is LLM integration (other person's work).
-    #
-    # The LLM person should:
-    #   1. Import their generate() function
-    #   2. Call it with `messages`
-    #   3. Run output guardrail on the answer
-    #   4. Call store_in_cache() with the final answer
-    #   5. Populate answer, flagged, failed in ChatResponse
-    #
-    # Example:
-    #   from app.rag.generation.llm import generate
-    #   from app.rag.generation.guardrails import check_output
-    #
-    #   llm_result     = generate(messages)
-    #   output_check   = check_output(llm_result["answer"], used_chunks)
-    #   final_answer   = output_check["answer"]
-    #   cited_ids      = extract_cited_chunks(final_answer, used_chunks)
-    #   store_in_cache(request.query, query_embedding, final_answer, cited_ids)
-    #
-    #   return ChatResponse(
-    #       answer   = final_answer,
-    #       sources  = _chunks_to_sources(used_chunks, final_answer),
-    #       cache_hit  = False,
-    #       confidence = True,
-    #       blocked    = False,
-    #       flagged    = output_check["flagged"],
-    #       failed     = llm_result["failed"],
-    #       latency    = latency,
-    #   )
-    # ─────────────────────────────────────────────────────────────────────────
-
-    # Temporary stub response — returns the RAG result without LLM answer
-    # Remove this block once LLM integration is complete
     return ChatResponse(
-        answer="[LLM integration pending — RAG pipeline returned successfully]",
-        sources=sources,
+        answer=final_answer,
+        sources=_chunks_to_sources(used_chunks, final_answer),
         cache_hit=False,
         confidence=True,
         blocked=False,
+        flagged=output_check["flagged"],
+        failed=llm_result["failed"],
         latency=latency,
     )
 
@@ -203,7 +176,7 @@ async def chat(request: ChatRequest) -> ChatResponse:
 # ─────────────────────────────────────────────────────────────────────────────
 # GET /api/v1/rag/context
 # Returns the RAG result (prompt + sources) without calling the LLM.
-# Useful for the LLM person to test their integration independently.
+# Useful for testing retrieval independently from generation.
 # ─────────────────────────────────────────────────────────────────────────────
 
 @rag_router.post(
@@ -212,7 +185,7 @@ async def chat(request: ChatRequest) -> ChatResponse:
     summary="Get RAG context without LLM (for LLM integration testing)",
     description=(
         "Returns the full RAG pipeline result — messages, sources, confidence — "
-        "without calling the LLM. The LLM person uses this to test their integration."
+        "without calling the LLM, which supports isolated retrieval testing."
     ),
 )
 async def get_context(request: ChatRequest) -> RAGResult:
@@ -298,7 +271,8 @@ async def get_context(request: ChatRequest) -> RAGResult:
 async def ingest(request: IngestRequest) -> IngestResponse:
     import time as _time
     from pathlib import Path as _Path
-    from app.rag.ingestion.parser import parse_folder, parse_file, ParseError
+    from app.config import PROJECT_ROOT
+    from app.rag.ingestion.parser import parse_file, ParseError
     from app.rag.ingestion.qdrant_writer import upsert_chunks
     from app.rag.retrieval.cache import invalidate_by_policy
 
@@ -307,7 +281,12 @@ async def ingest(request: IngestRequest) -> IngestResponse:
     total_chunks = 0
     files_processed = 0
 
-    folder = _Path(request.folder)
+    folder = _Path(request.folder).expanduser()
+    # Akilu changed this because relative ingestion paths must resolve
+    # consistently even when the API starts outside the repository directory.
+    if not folder.is_absolute():
+        folder = PROJECT_ROOT / folder
+    folder = folder.resolve()
     if not folder.exists():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -373,8 +352,10 @@ def _chunks_to_sources(
 def _ids_to_sources(chunk_ids: list[str]) -> list[SourceChunk]:
     return [
         SourceChunk(
-            chunk_id="", policy_id="", section_title="",
+            # Akilu changed this because cache-hit responses must preserve the
+            # cited chunk IDs instead of returning blank source identities.
+            chunk_id=chunk_id, policy_id="", section_title="",
             doc_type="", snippet="", score=0.0, cited=True,
         )
-        for _ in chunk_ids
+        for chunk_id in chunk_ids
     ]

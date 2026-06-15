@@ -3,8 +3,7 @@ src/app/api/health_router.py
 ─────────────────────────────────────────────────────────────────────────────
 GET /health — checks all services and returns their status.
 
-Your responsibility:  Qdrant, Redis, Embedder health checks.
-LLM person's responsibility: add LLM health check when ready.
+Checks Qdrant, Redis, embedder, and LLM connectivity.
 """
 
 from __future__ import annotations
@@ -63,17 +62,17 @@ async def health() -> HealthResponse:
     except Exception as exc:
         embedder = ServiceHealth(status="error", detail=str(exc))
 
-    # ── LLM (stub — LLM person fills this in) ─────────────────────────────────
-    # ── LLM INTEGRATION POINT ────────────────────────────────────────────────
-    # Replace the stub below with:
-    #   from app.rag.generation.llm import llm_health
-    #   lh = llm_health()
-    #   llm = ServiceHealth(status=lh["status"], detail=lh.get("model"))
-    # ─────────────────────────────────────────────────────────────────────────
-    llm = ServiceHealth(status="pending", detail="LLM integration not yet configured")
+    # Akilu changed this because the health endpoint should expose whether the
+    # configured chatbot provider is reachable before users send questions.
+    from app.rag.generation.llm import llm_health
+    lh = llm_health()
+    llm = ServiceHealth(
+        status=lh["status"],
+        detail=lh.get("model") if lh["status"] == "ok" else lh.get("detail"),
+    )
 
     # ── Overall status ────────────────────────────────────────────────────────
-    critical = [qdrant.status, redis.status, embedder.status]
+    critical = [qdrant.status, redis.status, embedder.status, llm.status]
     if all(s == "ok" for s in critical):
         overall = "healthy"
     elif any(s == "error" for s in critical):

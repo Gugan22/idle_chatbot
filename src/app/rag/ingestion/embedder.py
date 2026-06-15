@@ -7,7 +7,6 @@ Fixed: get_sentence_embedding_dimension() → get_embedding_dimension()
 
 from __future__ import annotations
 
-import os
 from functools import lru_cache
 
 from sentence_transformers import SentenceTransformer
@@ -21,15 +20,20 @@ if str(SRC) not in sys.path:
 
 from app.config import settings
 
-DOCUMENT_PREFIX = os.getenv("EMBED_DOC_PREFIX", "")
-QUERY_PREFIX    = os.getenv("EMBED_QUERY_PREFIX", "")
+DOCUMENT_PREFIX = settings.embed_doc_prefix
+QUERY_PREFIX = settings.embed_query_prefix
 
 
 @lru_cache(maxsize=1)
 def _get_model() -> SentenceTransformer:
     """Load the embedding model once and cache it for the process lifetime."""
     print(f"[embedder] Loading model '{settings.embed_model}'...")
-    model = SentenceTransformer(settings.embed_model)
+    # Akilu changed this because local development must be able to load a
+    # cached embedding model when Hugging Face network access is unavailable.
+    model = SentenceTransformer(
+        settings.embed_model,
+        local_files_only=settings.embed_local_files_only,
+    )
 
     # get_embedding_dimension() is the current API (get_sentence_embedding_dimension
     # is deprecated in sentence-transformers >= 3.x)

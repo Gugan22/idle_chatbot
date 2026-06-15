@@ -33,7 +33,7 @@
         "header": [],
         "body": {
           "mode": "raw",
-          "raw": "{\r\n    \"username\": \"admin\",\r\n    \"password\": \"admin\"\r\n}",
+          "raw": "{\r\n    \"username\": \"{{username}}\",\r\n    \"password\": \"{{password}}\"\r\n}",
           "options": {
             "raw": {
               "language": "json"
@@ -89,10 +89,18 @@
   "variable": [
     {
       "key": "host",
-      "value": ""
+      "value": "http://127.0.0.1:8080"
     },
     {
       "key": "token",
+      "value": ""
+    },
+    {
+      "key": "username",
+      "value": ""
+    },
+    {
+      "key": "password",
       "value": ""
     }
   ]

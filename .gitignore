@@ -2,6 +2,12 @@
 .venv
 .venv/*
 
+# Akilu changed this because runtime credentials and machine-specific settings
+# must never be committed. Keep only the sanitized template.
+.env
+.env.*
+!.env.example
+
 # Ignore the .qodo directory
 .qodo
 .qodo/*
@@ -36,5 +42,4 @@ dist/
 build/
 *.egg-info/
 
-# Ignore poetry lock file
-poetry.lock
+# Dependency lock files are intentionally not ignored.

@@ -80,7 +80,9 @@ def _point_to_dict(point: Any) -> dict[str, Any]:
 
     return {
         "chunk_id":      payload.get("chunk_id", ""),
-        "text":          payload.get("text", ""),
+        # Akilu changed this because older points may still store parser output
+        # under "content", while new ingestion standardizes it as "text".
+        "text":          payload.get("text", payload.get("content", "")),
         "section_title": payload.get("section_title", ""),
         "policy_id":     payload.get("policy_id", ""),
         "doc_type":      payload.get("doc_type", ""),
@@ -140,32 +142,31 @@ def search_multi_type(
     region: str | None = None,
 ) -> list[dict[str, Any]]:
     """
-    Run two parallel searches — one for policy docs, one for FAQs — and merge.
+    Search supported document types independently and merge the results.
 
-    Prevents one doc_type from drowning out the other in results.
-    Each type contributes at most TOP_K // 2 results.
+    Prevents one doc_type from drowning out the others in results.
     """
-    half_k = max(settings.top_k // 2, 5)
+    doc_types = ("policy", "faq", "coverage", "exclusion", "endorsement")
+    per_type_k = max(settings.top_k // len(doc_types), 3)
+    results: list[dict[str, Any]] = []
 
-    policy_results = search(
-        query_embedding=query_embedding,
-        doc_type="policy",
-        coverage_type=coverage_type,
-        region=region,
-        top_k=half_k,
-    )
-    faq_results = search(
-        query_embedding=query_embedding,
-        doc_type="faq",
-        coverage_type=coverage_type,
-        region=region,
-        top_k=half_k,
-    )
+    # Akilu changed this because coverage, exclusion, and endorsement chunks
+    # are valid insurance knowledge and must not be invisible to retrieval.
+    for doc_type in doc_types:
+        results.extend(
+            search(
+                query_embedding=query_embedding,
+                doc_type=doc_type,
+                coverage_type=coverage_type,
+                region=region,
+                top_k=per_type_k,
+            )
+        )
 
     # Merge and de-duplicate by chunk_id, sort by score
     seen: set[str] = set()
     merged: list[dict[str, Any]] = []
-    for chunk in policy_results + faq_results:
+    for chunk in results:
         cid = chunk.get("chunk_id", "")
         if cid not in seen:
             seen.add(cid)
@@ -180,11 +181,15 @@ def qdrant_health() -> dict[str, Any]:
     try:
         client = _get_client()
         info = client.get_collection(settings.collection_name)
+        # Akilu changed this because recent Qdrant clients expose point counts
+        # without the legacy vectors_count attribute.
+        points_count = getattr(info, "points_count", 0) or 0
+        vectors_count = getattr(info, "vectors_count", points_count) or points_count
         return {
             "status":        "ok",
             "collection":    settings.collection_name,
-            "vectors_count": info.vectors_count,
-            "points_count":  info.points_count,
+            "vectors_count": vectors_count,
+            "points_count":  points_count,
         }
     except Exception as exc:
         return {"status": "error", "detail": str(exc)}

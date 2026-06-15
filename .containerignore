@@ -1,0 +1,16 @@
+.git
+.gitignore
+.idea
+.qodo
+.venv
+.env
+.env.*
+!.env.example
+__pycache__
+*.pyc
+*.pyo
+*.log
+.pytest_cache
+htmlcov
+.coverage
+outputs

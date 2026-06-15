@@ -1,8 +1,8 @@
 from fastapi import FastAPI
-from dotenv import load_dotenv
+from fastapi.responses import RedirectResponse
+from fastapi.staticfiles import StaticFiles
+from pathlib import Path
 import uvicorn
-
-load_dotenv()
 
 from app import settings
 from app.api import auth_router, rag_router, health_router
@@ -12,11 +12,25 @@ from app.security import JWTAuthMiddleware
 def create_app() -> JWTAuthMiddleware:
     app = FastAPI(
         title="Insurance RAG Chatbot API",
-        description="Home insurance assistant powered by RAG",
+        description="Auto and homeowners insurance assistant powered by RAG",
         version="0.1.0",
         docs_url="/docs" if settings.env == "development" else None,
         redoc_url=None,
     )
+
+    # Akilu changed this because users need a browser interface for asking
+    # questions without manually calling the protected API endpoints.
+    frontend_dir = Path(__file__).resolve().parent / "frontend"
+    app.mount("/static", StaticFiles(directory=frontend_dir), name="static")
+
+    @app.get("/", include_in_schema=False)
+    async def frontend_redirect() -> RedirectResponse:
+        return RedirectResponse(url="/chat")
+
+    @app.get("/chat", include_in_schema=False)
+    async def chatbot_frontend():
+        from fastapi.responses import FileResponse
+        return FileResponse(frontend_dir / "index.html")
 
     app.include_router(auth_router)
     app.include_router(rag_router,    prefix="/api/v1")
@@ -27,6 +41,16 @@ def create_app() -> JWTAuthMiddleware:
 
 
 app = create_app()
+
+
+def start_server() -> None:
+    """Start the configured HTTP server from any working directory."""
+    uvicorn.run(
+        "app.main:app",
+        app_dir=str(Path(__file__).resolve().parents[1]),
+        host=settings.host,
+        port=settings.port,
+    )
 
 
 if __name__ == "__main__":
@@ -58,19 +82,4 @@ if __name__ == "__main__":
             print(build_no_context_response())
         sys.exit(0)
 
-    host = settings.host
-    port = settings.port
-    try:
-        uvicorn.run("app.main:app", app_dir="src", host=host, port=port, reload=True)
-    except OSError as e:
-        msg = str(e)
-        if "10013" in msg or getattr(e, "winerror", None) == 10013:
-            print(f"\nERROR: Could not bind to {host}:{port}")
-            for p in range(port + 1, port + 11):
-                try:
-                    uvicorn.run("app.main:app", app_dir="src", host=host, port=p, reload=True)
-                    break
-                except OSError:
-                    continue
-        else:
-            print("uvicorn failed to start:", e)
+    start_server()

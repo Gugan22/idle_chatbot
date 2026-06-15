@@ -125,7 +125,7 @@ def main() -> None:
         print(f"[setup] Connected to Qdrant at {settings.qdrant_host}:{settings.qdrant_port}")
     except Exception as e:
         print(f"[setup] ERROR: Cannot connect to Qdrant — {e}")
-        print("        Is Qdrant running? Try: podman start insurance-qdrant")
+        print("        Is Qdrant running? Try: scripts/podman-stack.sh infra")
         sys.exit(1)
 
     create_collection(client, recreate=args.recreate)

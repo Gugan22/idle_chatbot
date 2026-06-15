@@ -4,7 +4,7 @@ src/app/api/schemas.py
 Pydantic request/response models for all RAG API endpoints.
 
 Strict typing throughout — no raw dicts passed between layers.
-The LLM person adds their response fields to ChatResponse when ready.
+ChatResponse combines retrieval and generation results.
 """
 
 from __future__ import annotations
@@ -63,8 +63,8 @@ class SourceChunk(BaseModel):
 class RAGResult(BaseModel):
     """
     The RAG pipeline result — everything up to and including the prompt.
-    Returned to the LLM person's code as the handoff payload.
-    The LLM person populates 'answer' and returns the full ChatResponse.
+    Used as the handoff payload between retrieval and generation.
+    The chat endpoint uses this prompt-ready payload for LLM generation.
     """
     messages:   list[dict[str, Any]] = Field(
         description="OpenAI-format messages ready for LLM inference"
@@ -99,10 +99,12 @@ class ChatResponse(BaseModel):
         description="Per-stage latency in milliseconds",
     )
 
-    # ── LLM fields (LLM person's responsibility) ──────────────────────────────
+    # ── LLM fields ────────────────────────────────────────────────────────────
     # These have safe defaults so the endpoint works before LLM is integrated.
+    # Akilu changed this because the default must describe an actual generation
+    # failure now that the chat endpoint calls the LLM directly.
     answer:  str  = Field(
-        default="LLM integration pending.",
+        default="No answer was generated.",
         description="The generated answer — populated by LLM integration",
     )
     flagged: bool = Field(
@@ -157,11 +159,10 @@ class HealthResponse(BaseModel):
     qdrant:     ServiceHealth
     redis:      ServiceHealth
     embedder:   ServiceHealth
-    # LLM person adds their health check here:
     llm:        ServiceHealth = Field(
         default_factory=lambda: ServiceHealth(
             status="pending",
-            detail="LLM integration not yet configured",
+            detail="LLM health has not been checked",
         )
     )
     version:    str = "0.1.0"

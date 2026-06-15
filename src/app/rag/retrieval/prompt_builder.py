@@ -5,7 +5,7 @@ Assembles the final prompt sent to the LLM.
 
 Structure:
   [SYSTEM]
-  You are a home insurance assistant...
+  You are a personal insurance assistant...
   Instructions on citing sources, staying on topic, not guessing...
 
   [CONTEXT BLOCK 1]
@@ -32,7 +32,7 @@ Key design decisions:
     b) Cite the chunk_id of any clause it references
     c) Say "I don't have that information" rather than guessing
     d) Never provide definitive legal or financial advice
-    e) Stay strictly within home insurance topics
+    e) Stay strictly within auto and homeowners insurance topics
 """
 
 from __future__ import annotations
@@ -53,10 +53,12 @@ from app.config import settings
 # Defines the LLM's role, constraints, and citation format.
 # Keep this focused — long system prompts dilute instruction following.
 
-SYSTEM_PROMPT = """You are a knowledgeable and professional home insurance assistant \
+# Akilu changed this because the knowledge base now contains both auto and
+# homeowners coverage, so the assistant must support both product types.
+SYSTEM_PROMPT = """You are a knowledgeable and professional personal insurance assistant \
 for an insurance company.
 
-Your role is to help policyholders understand their home insurance coverage, \
+Your role is to help policyholders understand their auto and homeowners insurance coverage, \
 exclusions, claims process, and policy terms.
 
 STRICT RULES — follow these exactly:
@@ -66,9 +68,10 @@ STRICT RULES — follow these exactly:
 Please contact our support team for assistance."
 3. When you use information from a specific clause, cite it like this:
    [Source: {chunk_id}]
+   Copy the provided chunk_id exactly. Never alter, abbreviate, or invent it.
 4. Never provide definitive legal or financial advice. Use phrases like
    "according to your policy" or "based on the policy documents".
-5. Stay strictly on the topic of home insurance. Politely decline any
+5. Stay strictly on the topic of auto and homeowners insurance. Politely decline any
    off-topic questions.
 6. Do not fabricate policy numbers, coverage amounts, or claim timelines
    that are not explicitly stated in the context.

@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Ask questions about your auto and homeowners insurance policy.">
+  <title>Policy Guide</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <div class="page-shell">
+    <div class="login-overlay" id="login-overlay">
+      <form class="login-card" id="login-form">
+        <span class="brand-mark">PG</span>
+        <span class="eyebrow">Secure access</span>
+        <h2>Sign in to Policy Guide</h2>
+        <p>Use the chatbot credentials configured by your administrator.</p>
+        <label for="username">Username</label>
+        <input id="username" name="username" autocomplete="username" required>
+        <label for="password">Password</label>
+        <input id="password" name="password" type="password" autocomplete="current-password" required>
+        <p class="login-error" id="login-error" role="alert"></p>
+        <button type="submit">Sign in</button>
+      </form>
+    </div>
+
+    <header class="topbar">
+      <a class="brand" href="/chat" aria-label="Policy Guide home">
+        <span class="brand-mark">PG</span>
+        <span>
+          <strong>Policy Guide</strong>
+          <small>Insurance answers, grounded in your documents</small>
+        </span>
+      </a>
+      <div class="service-state">
+        <span class="status-dot" id="status-dot"></span>
+        <span id="status-label">Checking services</span>
+      </div>
+    </header>
+
+    <main class="chat-layout">
+      <aside class="intro-panel">
+        <span class="eyebrow">Your coverage companion</span>
+        <h1>Insurance language, made clear.</h1>
+        <p>Ask about auto or homeowners coverage and get an answer connected to the policy source.</p>
+
+        <div class="trust-card">
+          <span class="shield-icon">✓</span>
+          <div>
+            <strong>Answers stay grounded</strong>
+            <p>Every supported answer includes a citation from the retrieved policy documents.</p>
+          </div>
+        </div>
+
+        <div class="suggestions">
+          <span class="suggestion-label">Try asking</span>
+          <button class="suggestion" type="button">Does my policy cover collision damage to my car?</button>
+          <button class="suggestion" type="button">What does a deductible mean?</button>
+          <button class="suggestion" type="button">Is fire damage covered by homeowners insurance?</button>
+        </div>
+      </aside>
+
+      <section class="chat-panel" aria-label="Insurance chatbot">
+        <div class="messages" id="messages" aria-live="polite">
+          <article class="message assistant-message">
+            <div class="avatar">PG</div>
+            <div class="message-content">
+              <span class="message-author">Policy Guide</span>
+              <div class="bubble">
+                Hello. Ask me a question about your auto or homeowners insurance coverage.
+              </div>
+            </div>
+          </article>
+        </div>
+
+        <form class="composer" id="chat-form">
+          <label class="sr-only" for="question">Ask an insurance question</label>
+          <textarea id="question" rows="1" maxlength="1000" placeholder="Ask about your coverage..." required></textarea>
+          <button id="send-button" type="submit" aria-label="Send question">
+            <span>Send</span>
+            <span class="send-arrow">→</span>
+          </button>
+        </form>
+        <p class="disclaimer">Policy Guide provides document-based information, not legal or financial advice.</p>
+      </section>
+    </main>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

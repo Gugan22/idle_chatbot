@@ -86,18 +86,13 @@ def rerank(
     if not chunks:
         return []
 
-    # If fewer chunks than top_n, return all of them (no reranking needed)
-    if len(chunks) <= n:
-        for i, chunk in enumerate(chunks):
-            chunk["rerank_score"] = chunk.get("qdrant_score", 0.0)
-            chunk["rerank_rank"]  = i + 1
-        return chunks
-
     try:
         model = _get_model()
 
         # Build (query, chunk_text) pairs for the cross-encoder
         # The model reads both together and scores their relevance
+        # Akilu changed this because even small result sets need comparable
+        # cross-encoder scores before the confidence threshold is applied.
         pairs = [(query, chunk.get("text", "")) for chunk in chunks]
 
         # Predict relevance scores — returns a list of floats

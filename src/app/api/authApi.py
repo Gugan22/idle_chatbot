@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from app import settings
+import secrets
 import time
 import jwt
 
@@ -25,10 +26,13 @@ DEFAULT_TTL_SECONDS = settings.token_ttl_seconds
 
 @router.post("/login", response_model=TokenResponse)
 def login(payload: LoginRequest):
-	if payload.username != DEFAULT_USERNAME or payload.password != DEFAULT_PASSWORD:
+	if not DEFAULT_USERNAME or not DEFAULT_PASSWORD or not AUTH_SECRET:
+		raise HTTPException(status_code=503, detail="Server authentication is not configured")
+	if (
+		not secrets.compare_digest(payload.username, DEFAULT_USERNAME)
+		or not secrets.compare_digest(payload.password, DEFAULT_PASSWORD)
+	):
 		raise HTTPException(status_code=401, detail="Invalid credentials")
-	if not AUTH_SECRET:
-		raise HTTPException(status_code=500, detail="Server auth secret not configured")
 
 	now = int(time.time())
 	exp = now + DEFAULT_TTL_SECONDS

@@ -27,7 +27,7 @@ dependencies = [
 
     # ── Semantic cache ────────────────────────────────────────────────────
     "redis[hiredis]>=5.0.0",
-    "redisvl>=0.2.0",
+    "numpy>=1.26.0",
 
     # ── Embedding + reranking ─────────────────────────────────────────────
     "sentence-transformers>=3.0.0",
@@ -38,18 +38,13 @@ dependencies = [
     "openai>=1.30.0",
 
     # ── Guardrails ────────────────────────────────────────────────────────
-    "nemoguardrails>=0.9.0",
 
     # ── Document parsing ──────────────────────────────────────────────────
     "python-frontmatter>=1.1.0",
 
     # ── Observability ─────────────────────────────────────────────────────
-    "ragas>=0.1.9",
-    "prometheus-client>=0.20.0",
-    "structlog>=24.1.0",
 
     # ── Resilience ────────────────────────────────────────────────────────
-    "tenacity>=8.3.0",
 ]
 
 [project.optional-dependencies]
@@ -58,13 +53,31 @@ dev = [
     "pytest-asyncio>=0.23.0",
     "httpx>=0.27.0",
 ]
+evaluation = [
+    "ragas>=0.1.9",
+]
+observability = [
+    "prometheus-client>=0.20.0",
+    "structlog>=24.1.0",
+]
+advanced-guardrails = [
+    "nemoguardrails>=0.9.0",
+]
 
-[tool.poetry]
-packages = [{include = "app", from = "src"}]
+[project.scripts]
+idle-chatbot = "app.main:start_server"
 
-[tool.poetry.scripts]
-start = "app.main:start_server"
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+app = [
+    "frontend/*.html",
+    "frontend/*.css",
+    "frontend/*.js",
+    "rag/docs/*.md",
+]
 
 [build-system]
-requires = ["poetry-core>=2.0.0,<3.0.0"]
-build-backend = "poetry.core.masonry.api"
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
